@@ -5,7 +5,6 @@ Model architectures.
 """
 import tensorflow as tf
 import numpy as np
-import cv2
 
 from losses import make_structured_loss, make_quadruple_loss, make_detector_loss
 from utils.tf_utils import apply_patch_pert, apply_coord_pert, photometric_augmentation
@@ -41,7 +40,7 @@ def preprocess(img, kpt_coeff, spec, num_corr, photaug, pert_homo, pert_affine, 
             img = tf.map_fn(photometric_augmentation, img, back_prop=False)
         img = tf.clip_by_value(img, 0, 255)
         # perturb patches and coordinates.
-        pert_kpt_affine, kpt_ncoords, pert_kpt_coeff = apply_patch_pert(
+        pert_kpt_affine, kpt_ncoords = apply_patch_pert(
             kpt_coeff, pert_affine, spec.batch_size, num_corr, adjust_ratio=1. if dense_desc else 5. / 6.)
         if dense_desc:
             # image standardization
@@ -58,42 +57,7 @@ def preprocess(img, kpt_coeff, spec, num_corr, photaug, pert_homo, pert_affine, 
             out = tf.nn.batch_normalization(
                 patch, mean, variance, None, None, 1e-5)
         out = tf.stop_gradient(out)
-        return out, kpt_ncoords, pert_homo, pert_kpt_coeff
-
-def affine_to_cv(kpts, image_size):
-    cv_kpts = []
-    W = image_size[0]
-    H = image_size[1]
-    short_side = (float) (min(W, H));
-    for i in range(kpts.shape[0]):
-        (x, y) = (kpts[i, 2] * W/2 + W/2, kpts[i, 5] * H/2 + H/2)
-        m_cos = kpts[i,0]*short_side
-        m_sin = kpts[i,1]*short_side
-        rad = np.sqrt(m_cos**2 + m_sin**2)
-        patch_scale = 6.
-        size = rad/patch_scale
-        ori = 360. - (np.arccos(m_cos/rad) * 180./np.pi)
-        # octave = 1 << 8
-        octave = 0
-        cv_kpts.append(cv2.KeyPoint(x, y, size, ori, 1, octave))
-    return cv_kpts
-
-def compute_sift(kpt_coeff, img, num_corr, batch_size):
-    opencv_major =  int(cv2.__version__.split('.')[0])
-    opencv_minor =  int(cv2.__version__.split('.')[1])
-
-    if opencv_major == 4 and opencv_minor >= 5: 
-        sift = cv2.SIFT_create(nfeatures=kpt_coeff.shape[1])
-    else:
-        sift = cv2.xfeatures2d.SIFT_create()
-
-    desc = np.zeros((batch_size, num_corr, 128), dtype=np.single)
-    for i in range(batch_size):
-        cv_kpts = affine_to_cv(kpt_coeff[i,:,:], img[i,:,:,:].shape)
-        (cv_kpts, batch_desc) = sift.compute(img[i,:,:,:], cv_kpts)
-        desc[i,:,:] = np.asarray(batch_desc, dtype=np.single)
-
-    return desc
+        return out, kpt_ncoords, pert_homo
 
 
 def feat_tower(net_input, kpt_ncoords,
@@ -145,18 +109,12 @@ def aug_tower(feat_tower, kpt_ncoords, feat, img_feat,
 
         if config['aug']['geo_context']:
             with tf.compat.v1.variable_scope('kpt_m'):
-                if config['sift']:
-                    feat = tf.reshape(
-                        feat, [batch_size*num_corr, 1, 1, feat.get_shape()[-1].value])
-                    kpt_m_tower = MatchabilityPrediction({'data': feat},
-                                                         is_training=is_training, reuse=reuse)
-                else:
-                    inter_feat = feat_tower.get_output_by_name('conv5')
-                    if config['dense_desc']:
-                        inter_feat = tf.reshape(
-                            inter_feat, [batch_size * num_corr, 1, 1, inter_feat.get_shape()[-1].value])
-                    kpt_m_tower = MatchabilityPrediction({'data': inter_feat},
-                                                         is_training=is_training, reuse=reuse)
+                inter_feat = feat_tower.get_output_by_name('conv5')
+                if config['dense_desc']:
+                    inter_feat = tf.reshape(
+                        inter_feat, [batch_size * num_corr, 1, 1, inter_feat.get_shape()[-1].value])
+                kpt_m_tower = MatchabilityPrediction({'data': inter_feat},
+                                                     is_training=is_training, reuse=reuse)
                 kpt_m = tf.reshape(kpt_m_tower.get_output_by_name(
                     'kpt_m'), [batch_size, num_corr, 1])
 
@@ -191,7 +149,7 @@ def training(match_set_list, img_list, depth_list, reg_feat_list, config):
         reg_feat_list: List of regional features.
         config: Configuration file.
     Returns:
-        endpoints: Returned tensor list.
+        endpoints: Retured tensor list.
     """
     spec = helper.get_data_spec(model_class=GeoDesc)
 
@@ -232,40 +190,25 @@ def training(match_set_list, img_list, depth_list, reg_feat_list, config):
         get_rnd_affine, [2, spec.batch_size, num_corr], tf.float32)
     pert_affine = tf.reshape(pert_affine, (2, spec.batch_size, num_corr, 3, 3))
 
-    # TODO: check pert_kpt_coeff calculation
-    net_input0, kpt_ncoords0, pert_homo0, pert_kpt_coeff0 = preprocess(
+    net_input0, kpt_ncoords0, pert_homo0 = preprocess(
         img0, kpt_coeff0, spec, num_corr, config['photaug'],
         pert_homo[0], pert_affine[0], config['dense_desc'], name='input0')
-    net_input1, kpt_ncoords1, pert_homo1, pert_kpt_coeff1 = preprocess(
+    net_input1, kpt_ncoords1, pert_homo1 = preprocess(
         img1, kpt_coeff1, spec, num_corr, config['photaug'],
         pert_homo[1], pert_affine[1], config['dense_desc'], name='input1')
 
-    # import pdb; pdb.set_trace()
-
-    if config['sift']:
-        feat_tower0 = None
-        feat0 = tf.numpy_function(
-            compute_sift, [pert_kpt_coeff0, img0, num_corr, spec.batch_size], tf.float32)
-        feat0 = tf.reshape(feat0, (spec.batch_size, num_corr, 128))
-    else:
-        feat_tower0, feat0 = feat_tower(
-            net_input0, kpt_ncoords0, num_corr,
-            False, FLAGS.is_training, spec.batch_size, config, idx=0)
+    feat_tower0, feat0 = feat_tower(
+        net_input0, kpt_ncoords0, num_corr,
+        False, FLAGS.is_training, spec.batch_size, config, idx=0)
 
     aug_feat0, kpt_m0 = aug_tower(
         feat_tower0, kpt_ncoords0, feat0, img_feat0, num_corr,
         False, FLAGS.is_training, spec.batch_size, config,
         pert_homo=pert_homo0, idx=0)
 
-    if config['sift']:
-        feat_tower1 = None
-        feat1 = tf.numpy_function(
-            compute_sift, [pert_kpt_coeff1, img1, num_corr, spec.batch_size], tf.float32)
-        feat1 = tf.reshape(feat1, (spec.batch_size, num_corr, 128))
-    else:
-        feat_tower1, feat1 = feat_tower(
-            net_input1, kpt_ncoords1, num_corr,
-            True, FLAGS.is_training, spec.batch_size, config, idx=1)
+    feat_tower1, feat1 = feat_tower(
+        net_input1, kpt_ncoords1, num_corr,
+        True, FLAGS.is_training, spec.batch_size, config, idx=1)
 
     aug_feat1, kpt_m1 = aug_tower(
         feat_tower1, kpt_ncoords1, feat1, img_feat1, num_corr,
@@ -325,15 +268,11 @@ def training(match_set_list, img_list, depth_list, reg_feat_list, config):
                         kpt_m0, kpt_m1, inlier_num)
                     endpoints['kpt_m_loss'] = kpt_m_loss
                     endpoints['kpt_m_accuracy'] = kpt_m_accuracy
-                if config['sift']:
-                    endpoints['raw_loss'] = None
-                    endpoints['raw_accuracy'] = None
-                else:
-                    raw_loss, raw_accuracy, _ = make_structured_loss(
-                        tf.nn.l2_normalize(feat0, -1), tf.nn.l2_normalize(feat1, -1),
-                        loss_type=loss_type, inlier_mask=inlier_mask, name='raw_loss')
-                    endpoints['raw_loss'] = raw_loss
-                    endpoints['raw_accuracy'] = raw_accuracy
+                raw_loss, raw_accuracy, _ = make_structured_loss(
+                    tf.nn.l2_normalize(feat0, -1), tf.nn.l2_normalize(feat1, -1),
+                    loss_type=loss_type, inlier_mask=inlier_mask, name='raw_loss')
+                endpoints['raw_loss'] = raw_loss
+                endpoints['raw_accuracy'] = raw_accuracy
             else:
                 endpoints['raw_loss'] = None
                 endpoints['raw_accuracy'] = None

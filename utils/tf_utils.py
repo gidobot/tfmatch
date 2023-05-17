@@ -64,4 +64,5 @@ def apply_patch_pert(kpt_param, pert_affine, batch_size, num_corr, adjust_ratio=
     trans_with_pad = tf.expand_dims(trans * adjust_ratio, axis=-1)
     kpt_affine_with_pad = tf.concat((rot, trans_with_pad), axis=-1)
     pert_kpt_affine = tf.matmul(kpt_affine_with_pad, pert_affine)
-    return pert_kpt_affine, trans
+    pert_kpt_param = tf.reshape(pert_kpt_affine, shape=(batch_size, num_corr, 6))
+    return pert_kpt_affine, trans, pert_kpt_param

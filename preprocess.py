@@ -83,22 +83,27 @@ def prepare_match_sets(regenerate, is_training, q_diff_thld=3, rot_diff_thld=60,
         if os.path.exists(lock_path) and not FLAGS.dry_run:
             os.remove(lock_path)
         print(Notify.WARNING, 'Prepare match sets upon request.', Notify.ENDC)
-        prog_bar = progressbar.ProgressBar()
-        prog_bar.max_value = len(global_info)
+        prog_bar = progressbar.ProgressBar().start()
+        # prog_bar.max_value = len(global_info)
+        prog_bar.maxval = len(global_info)
         start_time = time.time()
         offset = 0
         for idx, val in enumerate(global_info):
-            record = val.split(' ')
-            out_match_set_path = os.path.join(
-                FLAGS.gl3d, 'data', record[0], 'match_sets')
-            in_corr_path = os.path.join(
-                FLAGS.gl3d, 'data', record[0], 'geolabel', 'corr.bin')
-            kpt_path = os.path.join(FLAGS.gl3d, 'data', record[0], 'img_kpts')
-            camera_path = os.path.join(
-                FLAGS.gl3d, 'data', record[0], 'geolabel', 'cameras.txt')
-            parse_corr_to_match_set(in_corr_path, kpt_path, camera_path, out_match_set_path,
-                                    FLAGS.num_corr, offset, dry_run=FLAGS.dry_run,
-                                    visualize=False, global_img_list=global_img_list)
+            try:
+                record = val.split(' ')
+                out_match_set_path = os.path.join(
+                    FLAGS.gl3d, 'data', record[0], 'match_sets')
+                in_corr_path = os.path.join(
+                    FLAGS.gl3d, 'data', record[0], 'geolabel', 'corr.bin')
+                kpt_path = os.path.join(FLAGS.gl3d, 'data', record[0], 'img_kpts')
+                camera_path = os.path.join(
+                    FLAGS.gl3d, 'data', record[0], 'geolabel', 'cameras.txt')
+                parse_corr_to_match_set(in_corr_path, kpt_path, camera_path, out_match_set_path,
+                                        FLAGS.num_corr, offset, dry_run=FLAGS.dry_run,
+                                        visualize=False, global_img_list=global_img_list)
+            except Exception as e:
+                print(e)
+                continue
             offset = int(record[2])
             prog_bar.update(idx)
         assert offset == len(global_img_list), Notify.FAIL + \

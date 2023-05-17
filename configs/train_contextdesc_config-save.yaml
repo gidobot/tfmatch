@@ -14,9 +14,9 @@ solver:
     adjust_lr: []
     update_var_scope:
 recoverer:
-  pretrained_model: 
-  ckpt_step: 
-  exclude_var: 
+  pretrained_model: 'contextdesc++/model.ckpt-400000'
+  ckpt_step: 400000
+  exclude_var: 'deform_param,Momentum,scale_temperature'
 dump:
   snapshot: 10000
   display: 20
