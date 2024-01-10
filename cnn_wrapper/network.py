@@ -91,7 +91,7 @@ class Network(object):
         # Seed for randomness
         self.seed = seed
         # Add regularizer for parameters.
-        self.regularizer = tf.contrib.layers.l2_regularizer(1.0) if regularize else None
+        self.regularizer = tf.keras.regularizers.l2(0.5 * (1.0)) if regularize else None
         # The epsilon paramater in BN layer.
         self.bn_epsilon = epsilon
         self.extra_args = kwargs
@@ -130,11 +130,11 @@ class Network(object):
                 if find_keyword:
                     continue
 
-            with tf.variable_scope(op_name, reuse=True):
+            with tf.compat.v1.variable_scope(op_name, reuse=True):
                 for param_name, data in data_dict[op_name].items():
 
                     try:
-                        var = tf.get_variable(param_name)
+                        var = tf.compat.v1.get_variable(param_name)
                         assign_op.append(var.assign(data))
                     except ValueError:
                         if not ignore_missing:
@@ -196,7 +196,7 @@ class Network(object):
              biased=True,
              reuse=False,
              kernel_init=None,
-             bias_init=tf.zeros_initializer,
+             bias_init=tf.compat.v1.zeros_initializer,
              separable=False,
              data_format='channels_last'):
         """2D/3D convolution."""
@@ -231,10 +231,10 @@ class Network(object):
             if not separable:
                 return tf.compat.v1.layers.conv2d(padded_input, **kwargs)
             else:
-                return tf.layers.separable_conv2d(padded_input, **kwargs)
+                return tf.compat.v1.layers.separable_conv2d(padded_input, **kwargs)
         elif len(input_tensor.get_shape()) == 5:
             if not separable:
-                return tf.layers.conv3d(padded_input, **kwargs)
+                return tf.compat.v1.layers.conv3d(padded_input, **kwargs)
             else:
                 raise NotImplementedError('No official implementation for separable_conv3d')
         else:
@@ -258,19 +258,19 @@ class Network(object):
 
         # normalization
         x = tf.reshape(x, [N, G, C // G, H, W])
-        mean, var = tf.nn.moments(x, [2, 3, 4], keep_dims=True)
+        mean, var = tf.nn.moments(x, [2, 3, 4], keepdims=True)
         x = (x - mean) / tf.sqrt(var + self.bn_epsilon)
 
         # per channel scale and bias (gamma and beta)
-        with tf.variable_scope(name, reuse=self.reuse or reuse):
+        with tf.compat.v1.variable_scope(name, reuse=self.reuse or reuse):
             if scale:
-                gamma = tf.get_variable('gamma', [C], dtype=tf.float32,
-                                        initializer=tf.ones_initializer())
+                gamma = tf.compat.v1.get_variable('gamma', [C], dtype=tf.float32,
+                                        initializer=tf.compat.v1.ones_initializer())
             else:
                 gamma = tf.constant(1.0, shape=[C])
             if center:
-                beta = tf.get_variable('beta', [C], dtype=tf.float32,
-                                       initializer=tf.zeros_initializer())
+                beta = tf.compat.v1.get_variable('beta', [C], dtype=tf.float32,
+                                       initializer=tf.compat.v1.zeros_initializer())
             else:
                 beta = tf.constant(0.0, shape=[C])
         gamma = tf.reshape(gamma, [1, C, 1, 1])
@@ -351,7 +351,7 @@ class Network(object):
                     dilation_rate=1,
                     padding=DEFAULT_PADDING,
                     kernel_init=None,
-                    bias_init=tf.zeros_initializer,
+                    bias_init=tf.compat.v1.zeros_initializer,
                     reuse=False):
         def _pad_input(inputs, kernel_size, strides, dilation_rate):
             if self.training:
@@ -413,8 +413,8 @@ class Network(object):
                 # similarity est
                 ori = self.conv(inputs, kernel_size, 2, strides, name + '/ori', relu=False,
                                 dilation_rate=dilation_rate, padding='VALID',
-                                kernel_init=tf.zeros_initializer,
-                                bias_init=tf.constant_initializer([1., 0.]),
+                                kernel_init=tf.compat.v1.zeros_initializer,
+                                bias_init=tf.compat.v1.constant_initializer([1., 0.]),
                                 biased=True, reuse=reuse)
                 ori = tf.nn.l2_normalize(ori, axis=-1)
                 cos = ori[:, :, :, 0, None]
@@ -423,8 +423,8 @@ class Network(object):
                               tf.concat([-sin, cos], axis=-1)], axis=-2)
                 scale = self.conv(inputs, kernel_size, 1, strides, name + '/scale', relu=False,
                                   dilation_rate=dilation_rate, padding='VALID',
-                                  kernel_init=tf.zeros_initializer,
-                                  bias_init=tf.constant_initializer(0.),
+                                  kernel_init=tf.compat.v1.zeros_initializer,
+                                  bias_init=tf.compat.v1.constant_initializer(0.),
                                   biased=True, reuse=reuse)
                 scale = tf.exp(tf.tanh(scale))
                 comb_A = scale[..., None] * R
@@ -432,8 +432,8 @@ class Network(object):
                 if False:
                     aff = self.conv(inputs, kernel_size, 3, strides, name + '/aff', relu=False,
                                     dilation_rate=dilation_rate, padding='VALID',
-                                    kernel_init=tf.zeros_initializer,
-                                    bias_init=tf.zeros_initializer,
+                                    kernel_init=tf.compat.v1.zeros_initializer,
+                                    bias_init=tf.compat.v1.zeros_initializer,
                                     biased=True, reuse=reuse)
                     aff = self.tanh(aff)
 
@@ -473,7 +473,7 @@ class Network(object):
             elif deform_type == 'h':
                 h4p_offset = self.conv(inputs, kernel_size, 8, strides, name + '/offset', relu=False,
                                        dilation_rate=dilation_rate, padding='VALID',
-                                       kernel_init=tf.zeros_initializer, bias_init=tf.zeros_initializer,
+                                       kernel_init=tf.compat.v1.zeros_initializer, bias_init=tf.compat.v1.zeros_initializer,
                                        biased=True, reuse=reuse)
                 h4p_offset = self.tanh(h4p_offset) * 0.95
                 if False:
@@ -481,8 +481,8 @@ class Network(object):
                 else:
                     scale = self.conv(inputs, kernel_size, 1, strides, name + '/scale', relu=False,
                                       dilation_rate=dilation_rate, padding='VALID',
-                                      kernel_init=tf.zeros_initializer,
-                                      bias_init=tf.constant_initializer(0.),
+                                      kernel_init=tf.compat.v1.zeros_initializer,
+                                      bias_init=tf.compat.v1.constant_initializer(0.),
                                       biased=True, reuse=reuse)
                     scale = tf.exp(tf.tanh(scale))
                     H_mat = solve_DLT(h4p_offset, self.training, scale=scale)
@@ -514,12 +514,12 @@ class Network(object):
             elif deform_type == 'u':
                 offset = self.conv(inputs, kernel_size, offset_num * 2, strides, name + '/offset', relu=False,
                                    dilation_rate=dilation_rate, padding='VALID',
-                                   kernel_init=tf.zeros_initializer, bias_init=tf.zeros_initializer,
+                                   kernel_init=tf.compat.v1.zeros_initializer, bias_init=tf.compat.v1.zeros_initializer,
                                    biased=True, reuse=reuse)
             if modulated:
                 amplitude = self.conv(inputs, kernel_size, offset_num, strides, name + '/amplitude', relu=False,
                                       dilation_rate=dilation_rate, padding='VALID',
-                                      kernel_init=tf.zeros_initializer, bias_init=tf.zeros_initializer,
+                                      kernel_init=tf.compat.v1.zeros_initializer, bias_init=tf.compat.v1.zeros_initializer,
                                       biased=True, reuse=reuse)
                 amplitude = tf.math.sigmoid(amplitude)
 
@@ -640,9 +640,9 @@ class Network(object):
             kwargs['padding'] = 'VALID'
 
         if len(input_tensor.get_shape()) == 4:
-            return tf.layers.conv2d_transpose(padded_input, **kwargs)
+            return tf.compat.v1.layers.conv2d_transpose(padded_input, **kwargs)
         elif len(input_tensor.get_shape()) == 5:
-            return tf.layers.conv3d_transpose(padded_input, **kwargs)
+            return tf.compat.v1.layers.conv3d_transpose(padded_input, **kwargs)
         else:
             raise ValueError('Improper input rank for layer: ' + name)
 
@@ -704,7 +704,7 @@ class Network(object):
             padded_input = caffe_like_padding(input_tensor, padding)
             padding_type = 'VALID'
 
-        return tf.layers.max_pooling2d(padded_input,
+        return tf.compat.v1.layers.max_pooling2d(padded_input,
                                        pool_size=pool_size,
                                        strides=strides,
                                        padding=padding_type,
@@ -719,7 +719,7 @@ class Network(object):
         else:
             padded_input = caffe_like_padding(input_tensor, padding)
             padding_type = 'VALID'
-        return tf.layers.average_pooling2d(padded_input,
+        return tf.compat.v1.layers.average_pooling2d(padded_input,
                                            pool_size=pool_size,
                                            strides=strides,
                                            padding=padding_type,
@@ -734,7 +734,7 @@ class Network(object):
         else:
             padded_input = caffe_like_padding(input_tensor, padding)
             padding_type = 'VALID'
-        return tf.sqrt(tf.layers.average_pooling2d(
+        return tf.sqrt(tf.compat.v1.layers.average_pooling2d(
             tf.square(padded_input),
             pool_size=pool_size,
             strides=strides,
@@ -762,10 +762,10 @@ class Network(object):
     def fc(self, input_tensor, num_out, name, biased=True, relu=True, flatten=True, reuse=False):
         # To behave same to Caffe.
         if flatten:
-            flatten_tensor = tf.layers.flatten(input_tensor)
+            flatten_tensor = tf.compat.v1.layers.flatten(input_tensor)
         else:
             flatten_tensor = input_tensor
-        return tf.layers.dense(flatten_tensor,
+        return tf.compat.v1.layers.dense(flatten_tensor,
                                units=num_out,
                                use_bias=biased,
                                activation=tf.nn.relu if relu else None,
@@ -787,7 +787,7 @@ class Network(object):
 
     @layer
     def softmax(self, input_tensor, name, dim=-1):
-        return tf.nn.softmax(input_tensor, dim=dim, name=name)
+        return tf.nn.softmax(input_tensor, axis=dim, name=name)
 
     @layer
     def batch_normalization(self, input_tensor, name, axis=-1,
@@ -812,14 +812,14 @@ class Network(object):
     @layer
     def context_normalization(self, input_tensor, name):
         """The input is a feature matrix with a shape of BxNx1xD"""
-        mean, variance = tf.nn.moments(input_tensor, axes=[1], keep_dims=True)
+        mean, variance = tf.nn.moments(input_tensor, axes=[1], keepdims=True)
         output = tf.nn.batch_normalization(
             input_tensor, mean, variance, None, None, self.bn_epsilon)
         return output
 
     @layer
     def dropout(self, input_tensor, name):
-        return tf.layers.dropout(input_tensor,
+        return tf.compat.v1.layers.dropout(input_tensor,
                                  rate=self.dropout_rate,
                                  training=self.training,
                                  seed=self.seed,
@@ -843,7 +843,7 @@ class Network(object):
 
     @layer
     def flatten(self, input_tensor, name=None):
-        return tf.layers.flatten(input_tensor, name=name)
+        return tf.compat.v1.layers.flatten(input_tensor, name=name)
 
     @layer
     def tanh(self, input_tensor, name=None):

@@ -240,8 +240,10 @@ def parse_corr_to_match_set(input_corr, kpt_path, camera_path, out_root, match_s
             img0 = cv2.imread(global_img_list[img_idx[0]])[..., ::-1]
             img1 = cv2.imread(global_img_list[img_idx[1]])[..., ::-1]
 
-            tmp_kpts0 = np.stack([all_kpt0[:, 2], all_kpt0[:, 5]], axis=-1)
-            tmp_kpts1 = np.stack([all_kpt1[:, 2], all_kpt1[:, 5]], axis=-1)
+            # tmp_kpts0 = np.stack([all_kpt0[:, 2], all_kpt0[:, 5]], axis=-1)
+            # tmp_kpts1 = np.stack([all_kpt1[:, 2], all_kpt1[:, 5]], axis=-1)
+            tmp_kpts0 = np.stack([inlier_kpt0[:, 2], inlier_kpt0[:, 5]], axis=-1)
+            tmp_kpts1 = np.stack([inlier_kpt1[:, 2], inlier_kpt1[:, 5]], axis=-1)
             tmp_img_size0 = np.array((img0.shape[1], img0.shape[0]))
             tmp_img_size1 = np.array((img1.shape[1], img1.shape[0]))
             tmp_kpts0 = tmp_kpts0 * tmp_img_size0 / 2 + tmp_img_size0 / 2

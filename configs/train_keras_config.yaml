@@ -14,19 +14,19 @@ solver:
     adjust_lr: []
     update_var_scope:
 recoverer:
-  # pretrained_model:
-  pretrained_model: 'ckpt-contextdesc/model.ckpt-800000'
+  pretrained_model:
+  # pretrained_model: 'ckpt-contextdesc/model.ckpt-800000'
   # pretrained_model: '/media/gidobot/data/contextdesc/pretrained/contextdesc++/model.ckpt-400000'
-  ckpt_step: 1000000
+  ckpt_step:
   # exclude_var: 'deform_param,Momentum,scale_temperature'
   exclude_var:
 dump:
   snapshot: 10000
   display: 20
-  max_steps: 1000000
+  max_steps: 800000
   log_dir: 'log'
 network:
-  quantize: true
+  quantize: false
   loss_type: 'LOG'
   photaug: true
   dense_desc: false

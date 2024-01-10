@@ -193,10 +193,10 @@ def solve_DLT(pred_h4p, training, constrained=True, scale=None):
 
     # Solve the Ax = b
     if constrained:
-        A_t_mat = tf.matrix_transpose(A_mat)
+        A_t_mat = tf.linalg.matrix_transpose(A_mat)
         A_mat = tf.matmul(A_t_mat, A_mat)
         b_mat = tf.matmul(A_t_mat, b_mat)
-        H_6el = tf.matrix_solve(A_mat, b_mat)
+        H_6el = tf.linalg.solve(A_mat, b_mat)
         H_6el = tf.squeeze(H_6el, axis=-1)
 
         if scale is not None:
@@ -211,7 +211,7 @@ def solve_DLT(pred_h4p, training, constrained=True, scale=None):
         H_6el = tf.reshape(H_6el, [bs, h, w, 3, 2])   # BATCH_SIZE x 3 x 3
         H_mat = tf.concat([H_6el, h3], axis=-1)
     else:
-        H_8el = tf.matrix_solve(A_mat, b_mat)  # BATCH_SIZE x 8.
+        H_8el = tf.linalg.solve(A_mat, b_mat)  # BATCH_SIZE x 8.
         H_8el = tf.squeeze(H_8el, axis=-1)
 
         if scale is not None:
@@ -256,5 +256,5 @@ if __name__ == "__main__":
     pert_xy = pert_xy[:, :, :, :, 0:2]
     pert_xy = tf.clip_by_value(tf.math.divide_no_nan(pert_xy, homo_scale), -10., 10.)
 
-    with tf.Session() as sess:
+    with tf.compat.v1.Session() as sess:
         print(sess.run(pert_xy))

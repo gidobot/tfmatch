@@ -17,29 +17,29 @@ recoverer:
   # pretrained_model:
   pretrained_model: 'ckpt-contextdesc/model.ckpt-800000'
   # pretrained_model: '/media/gidobot/data/contextdesc/pretrained/contextdesc++/model.ckpt-400000'
-  ckpt_step: 1000000
+  # ckpt_step: 400000
   # exclude_var: 'deform_param,Momentum,scale_temperature'
+  ckpt_step: 800000
   exclude_var:
 dump:
   snapshot: 10000
   display: 20
-  max_steps: 1000000
+  max_steps: 800000
   log_dir: 'log'
 network:
-  quantize: true
   loss_type: 'LOG'
   photaug: true
-  dense_desc: false
+  dense_desc: true
   resize: -1
   use_corr_n: -1
   deform_desc: 0
-  sift: false
+  sift: true
   aug:
     # Geometric context
-    geo_context: false
+    geo_context: true
     kpt_m: 1.0
     # Visual context
-    vis_context: false
+    vis_context: true
     vis_feat_reso: 14
     vis_feat_dim: 2048
   det:

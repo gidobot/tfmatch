@@ -14,7 +14,7 @@ import progressbar
 from tools.common import Notify
 from tools.io import parse_corr_to_match_set, read_list
 
-FLAGS = tf.app.flags.FLAGS
+FLAGS = tf.compat.v1.app.flags.FLAGS
 
 
 def get_match_set_list(imageset_list_path, q_diff_thld, rot_diff_thld):

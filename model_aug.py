@@ -29,7 +29,7 @@ def preprocess(img, kpt_coeff, spec, num_corr, photaug, pert_homo, pert_affine, 
     """
     Data Preprocess.
     """
-    with tf.name_scope(name):  # pylint: disable=not-context-manager
+    with tf.compat.v1.name_scope(name):  # pylint: disable=not-context-manager
         img = tf.cast(img, tf.float32)
         img.set_shape((spec.batch_size,
                        img.get_shape()[1].value,
@@ -45,7 +45,7 @@ def preprocess(img, kpt_coeff, spec, num_corr, photaug, pert_homo, pert_affine, 
         if dense_desc:
             # image standardization
             mean, variance = tf.nn.moments(
-                tf.cast(img, tf.float32), axes=[1, 2], keep_dims=True)
+                tf.cast(img, tf.float32), axes=[1, 2], keepdims=True)
             out = tf.nn.batch_normalization(
                 img, mean, variance, None, None, 1e-5)
         else:
@@ -53,7 +53,7 @@ def preprocess(img, kpt_coeff, spec, num_corr, photaug, pert_homo, pert_affine, 
             patch = st.transformer_crop(
                 img, pert_kpt_affine, spec.input_size, True)
             # patch standardization
-            mean, variance = tf.nn.moments(patch, axes=[1, 2], keep_dims=True)
+            mean, variance = tf.nn.moments(patch, axes=[1, 2], keepdims=True)
             out = tf.nn.batch_normalization(
                 patch, mean, variance, None, None, 1e-5)
         out = tf.stop_gradient(out)
@@ -62,7 +62,7 @@ def preprocess(img, kpt_coeff, spec, num_corr, photaug, pert_homo, pert_affine, 
 
 def feat_tower(net_input, kpt_ncoords,
                num_corr, reuse, is_training, batch_size, config, idx=0):
-    with tf.name_scope('feat_tower%s' % idx):  # pylint: disable=not-context-manager
+    with tf.compat.v1.name_scope('feat_tower%s' % idx):  # pylint: disable=not-context-manager
         if config['dense_desc']:
             config_dict = {}
             config_dict['interpolate'] = interpolate
@@ -94,7 +94,7 @@ def aug_tower(feat_tower, kpt_ncoords, feat, img_feat,
               pert_homo=None, idx=0):
     aug_feat = [feat]
 
-    with tf.name_scope('aug_tower%s' % idx):  # pylint: disable=not-context-manager
+    with tf.compat.v1.name_scope('aug_tower%s' % idx):  # pylint: disable=not-context-manager
         if config['aug']['vis_context']:
             points = kpt_ncoords
 
@@ -216,7 +216,7 @@ def training(match_set_list, img_list, depth_list, reg_feat_list, config):
         pert_homo=pert_homo1, idx=1)
 
     endpoints = {}
-    with tf.name_scope('loss'):  # pylint: disable=not-context-manager
+    with tf.compat.v1.name_scope('loss'):  # pylint: disable=not-context-manager
         loss_type = config['loss_type']
 
         structured_loss = tf.constant(0.)
@@ -281,7 +281,7 @@ def training(match_set_list, img_list, depth_list, reg_feat_list, config):
         endpoints['accuracy'] = accuracy
 
     # Add summaries for viewing model statistics on TensorBoard.
-    with tf.name_scope('summaries'):  # pylint: disable=not-context-manager
+    with tf.compat.v1.name_scope('summaries'):  # pylint: disable=not-context-manager
         scalars = [accuracy, structured_loss]
         _activation_summaries([], scalars)
 
@@ -300,7 +300,7 @@ def _training_data_queue(spec, match_set_list, img_list, depth_list, reg_feat_li
         batch_tensors: List of fetched data.
     """
 
-    with tf.name_scope('data_queue'):  # pylint: disable=not-context-manager
+    with tf.compat.v1.name_scope('data_queue'):  # pylint: disable=not-context-manager
         # sample queue. the sample list has been shuffled.
         def _match_set_parser(val):
             def _parse_img(img_paths, idx):
@@ -335,13 +335,13 @@ def _training_data_queue(spec, match_set_list, img_list, depth_list, reg_feat_li
 
             def _parse_reg_feat(reg_feat_paths, idx, reg_feat_reso, reg_feat_dim):
                 reg_feat_path = tf.squeeze(tf.gather(reg_feat_paths, idx))
-                reg_feat = tf.decode_raw(
-                    tf.read_file(reg_feat_path), tf.float32)
+                reg_feat = tf.io.decode_raw(
+                    tf.io.read_file(reg_feat_path), tf.float32)
                 reg_feat = tf.reshape(
                     reg_feat, (reg_feat_reso, reg_feat_reso, reg_feat_dim))
                 return reg_feat
 
-            decoded = tf.decode_raw(val, tf.float32)
+            decoded = tf.io.decode_raw(val, tf.float32)
             idx0 = tf.cast(decoded[0], tf.int32)
             idx1 = tf.cast(decoded[1], tf.int32)
             inlier_num = tf.cast(decoded[2], tf.int32)
@@ -392,13 +392,13 @@ def _training_data_queue(spec, match_set_list, img_list, depth_list, reg_feat_li
             _match_set_parser, num_parallel_calls=spec.batch_size * 2)
         dataset = dataset.batch(spec.batch_size)
         dataset = dataset.prefetch(buffer_size=spec.batch_size * 4)
-        iterator = dataset.make_one_shot_iterator()
+        iterator = tf.compat.v1.data.make_one_shot_iterator(dataset)
         batch_tensors = iterator.get_next()
     return batch_tensors
 
 
 def _activation_summaries(histo, scalar):
     for act in histo:
-        tf.summary.histogram(act.op.name + '/histogram', act)
+        tf.compat.v1.summary.histogram(act.op.name + '/histogram', act)
     for act in scalar:
-        tf.summary.scalar(act.op.name + '/scalar', act)
+        tf.compat.v1.summary.scalar(act.op.name + '/scalar', act)

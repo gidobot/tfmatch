@@ -116,7 +116,7 @@ class ASLFeat(Network):
         from tensorflow.python.training.moving_averages import assign_moving_average
         with tf.compat.v1.variable_scope('tower', reuse=self.reuse):
             moving_instance_max = tf.compat.v1.get_variable('%s/instance_max' % name, (),
-                                                            initializer=tf.constant_initializer(
+                                                            initializer=tf.compat.v1.constant_initializer(
                                                                 1),
                                                             trainable=False)
         decay = 0.99
@@ -133,7 +133,7 @@ class ASLFeat(Network):
                                      [pad_size, pad_size], [0, 0]], mode='REFLECT')
 
         avg_spatial_inputs = tf.nn.pool(pad_inputs, [ksize, ksize],
-                                'AVG', padding='VALID', dilation_rate=[dilation, dilation])
+                                'AVG', padding='VALID', dilations=[dilation, dilation])
         avg_channel_inputs = tf.reduce_mean(inputs, axis=-1, keepdims=True)
 
         alpha = tf.math.softplus(inputs - avg_spatial_inputs)
@@ -147,7 +147,7 @@ class ASLFeat(Network):
         from tensorflow.python.training.moving_averages import assign_moving_average
         with tf.compat.v1.variable_scope('tower', reuse=self.reuse):
             moving_instance_max = tf.compat.v1.get_variable('%s/instance_max' % name, (),
-                                                            initializer=tf.constant_initializer(
+                                                            initializer=tf.compat.v1.constant_initializer(
                                                                 1),
                                                             trainable=False)
         decay = 0.99
@@ -162,7 +162,7 @@ class ASLFeat(Network):
         pad_exp_logit = tf.pad(exp_logit, [[0, 0], [dilation, dilation],
                                            [dilation, dilation], [0, 0]], constant_values=1)
         sum_logit = tf.nn.pool(pad_exp_logit, [ksize, ksize],
-                               'AVG', 'VALID', dilation_rate=[dilation, dilation]) * (ksize ** 2)
+                               'AVG', padding='VALID', dilations=[dilation, dilation]) * (ksize ** 2)
         alpha = exp_logit / (sum_logit + 1e-6)
         return alpha, beta
 
@@ -190,7 +190,7 @@ class ASLFeat(Network):
         if bs is None:
             mask = tf.reshape(mask, (h, w))
             score_map = tf.reshape(score_map, (h, w))
-            indices = tf.where(mask)
+            indices = tf.compat.v1.where(mask)
             scores = tf.gather_nd(score_map, indices)
             sample = tf.argsort(scores, direction='DESCENDING')[0:k]
 
@@ -202,7 +202,7 @@ class ASLFeat(Network):
             for i in range(bs):
                 tmp_mask = tf.reshape(mask[i], (h, w))
                 tmp_score_map = tf.reshape(score_map[i], (h, w))
-                tmp_indices = tf.where(tmp_mask)
+                tmp_indices = tf.compat.v1.where(tmp_mask)
                 tmp_scores = tf.gather_nd(tmp_score_map, tmp_indices)
                 tmp_sample = tf.argsort(tmp_scores, direction='DESCENDING')[0:k]
                 tmp_indices = tf.gather(tmp_indices, tmp_sample)

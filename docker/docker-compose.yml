@@ -1,0 +1,27 @@
+version: "3"
+
+services:
+
+  tfmatch:
+    image: docker:tfmatch
+    build:
+      context: .
+      dockerfile: Dockerfile.tfmatch
+      # args: &args
+        # github_oauth: "${GITHUB_OAUTH}"
+    # depends_on:
+      # - ros-master
+    network_mode: "host"
+    # environment:
+      # - "ROS_PYTHON_LOG_CONFIG_FILE=/python_logging_${ROS_PYTHON_ROSOUT_LOG_LEVEL:-INFO}.conf"
+      # - "ROS_MASTER_URI=http://ros-master:11311"
+    # networks:
+      # - ros
+    # volumes:
+      # - "/etc/localtime:/etc/localtime:ro"
+      # - "../:/featurelab:rw"
+      # - "/home/gidobot/workspace/data/UWslam_dataset:/data:ro"
+    # devices:
+      # - "/dev/gpiomem:/dev/gpiomem"
+    # command: stdbuf -o L /bin/bash
+    # restart: always

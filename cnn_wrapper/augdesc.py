@@ -23,9 +23,9 @@ class VisualContext(Network):
         norm = tf.tile(norm, [1, 1, 3])
         weight = (1.0 / dist) / norm
         idx = tf.reshape(idx, (batch_size, -1))
-        nn_points = tf.batch_gather(points2, idx)
+        nn_points = tf.compat.v1.batch_gather(points2, idx)
         nn_points = tf.reshape(
-            nn_points, (batch_size, ndataset1, 3, points2.get_shape()[-1].value))
+            nn_points, (batch_size, ndataset1, 3, points2.get_shape()[-1]))
         interpolated_points = tf.reduce_sum(
             weight[..., tf.newaxis] * nn_points, axis=-2)
 
@@ -49,7 +49,7 @@ class VisualContext(Network):
         kpt_ncoords = self.inputs['kpt_ncoords']
         # config
         batch_size = tf.shape(vis_context_feat)[0]
-        img_feat_dim = vis_context_feat.get_shape()[-1].value
+        img_feat_dim = vis_context_feat.get_shape()[-1]
         # generate grid pts.
         x_rng = tf.linspace(-1., 1., tf.shape(vis_context_feat)[2])
         y_rng = tf.linspace(-1., 1., tf.shape(vis_context_feat)[1])
@@ -82,7 +82,7 @@ class MatchabilityPrediction(Network):
     """Matchability prediction."""
 
     def setup(self):
-        patch_size = self.inputs['data'].get_shape()[1].value
+        patch_size = self.inputs['data'].get_shape()[1]
         (self.feed('data')
          .conv_bn(patch_size, 128, 1, padding='VALID', name='kpt_m_conv0')
          .conv_bn(1, 32, 1, padding='VALID', name='kpt_m_conv1')

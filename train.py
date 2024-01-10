@@ -21,27 +21,27 @@ from template.misc import summarizer
 from template.solver import solver
 from template.recoverer import recoverer
 
-FLAGS = tf.app.flags.FLAGS
+FLAGS = tf.compat.v1.app.flags.FLAGS
 
 # Params for config.
-tf.app.flags.DEFINE_string('save_dir', None,
+tf.compat.v1.app.flags.DEFINE_string('save_dir', None,
                            """Path to save the model.""")
-tf.app.flags.DEFINE_string('gl3d', None,
+tf.compat.v1.app.flags.DEFINE_string('gl3d', None,
                            """Path to dataset root.""")
-tf.app.flags.DEFINE_integer('num_corr', 1024,
+tf.compat.v1.app.flags.DEFINE_integer('num_corr', 1024,
                             """The correspondence number of one sample.""")
 # Training config
-tf.app.flags.DEFINE_string('train_config', None,
+tf.compat.v1.app.flags.DEFINE_string('train_config', None,
                            """Path to training configuration file.""")
-tf.app.flags.DEFINE_string('data_split', 'comb',
+tf.compat.v1.app.flags.DEFINE_string('data_split', 'comb',
                            """Which data split in GL3D will be used.""")
-tf.app.flags.DEFINE_boolean('is_training', None,
+tf.compat.v1.app.flags.DEFINE_boolean('is_training', None,
                             """Flag to training model.""")
-tf.app.flags.DEFINE_boolean('regenerate', False,
+tf.compat.v1.app.flags.DEFINE_boolean('regenerate', False,
                             """Flag to re-generate training samples.""")
-tf.app.flags.DEFINE_boolean('dry_run', False,
+tf.compat.v1.app.flags.DEFINE_boolean('dry_run', False,
                             """Whether to enable dry-run mode in data generation (useful for debugging).""")
-tf.app.flags.DEFINE_integer('device_idx', 0,
+tf.compat.v1.app.flags.DEFINE_integer('device_idx', 0,
                             """GPU device index.""")
 
 
@@ -77,9 +77,13 @@ def train(sample_list, img_list, depth_list, reg_feat_list, train_config):
     config.gpu_options.allow_growth = True
     config.allow_soft_placement = True
     config.log_device_placement = False
+    config.intra_op_parallelism_threads = 1
+    config.inter_op_parallelism_threads = 1
     with tf.compat.v1.Session(config=config) as sess:
         dump_config = train_config['dump']
         # Initialize variables.
+        if train_config['network']['quantize']:
+            tf.compat.v1.quantize.create_training_graph(input_graph=sess.graph, quant_delay=5)
         print(Notify.INFO, 'Running initialization operator.', Notify.ENDC)
         sess.run(init_op)
         step = recoverer(train_config['recoverer'], sess)
@@ -91,7 +95,7 @@ def train(sample_list, img_list, depth_list, reg_feat_list, train_config):
                 _ = sess.run([assign_global_step])
             if dump_config['log_dir'] is not None:
                 print(Notify.INFO, 'Create log writer.', Notify.ENDC)
-                summary_writer = tf.summary.FileWriter(
+                summary_writer = tf.compat.v1.summary.FileWriter(
                     dump_config['log_dir'], sess.graph)
         # Start populating the queue.
         start_time = time.time()
@@ -135,7 +139,8 @@ def main(argv=None):  # pylint: disable=unused-argument
 
 
 if __name__ == '__main__':
-    tf.flags.mark_flags_as_required(['is_training', 'gl3d', 'train_config'])
+    tf.compat.v1.flags.mark_flags_as_required(['is_training', 'gl3d', 'train_config'])
     if FLAGS.is_training:
-        tf.flags.mark_flags_as_required(['save_dir'])
+        tf.compat.v1.flags.mark_flags_as_required(['save_dir'])
+    tf.compat.v1.disable_eager_execution()
     tf.compat.v1.app.run()

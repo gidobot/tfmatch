@@ -18,7 +18,7 @@ def photometric_augmentation(image, random_order=True):
     # 'kernel_size_range': [100, 150]}
     config['motion_blur'] = {'max_kernel_size': 3}
 
-    with tf.name_scope('photometric_augmentation'):
+    with tf.compat.v1.name_scope('photometric_augmentation'):
         prim_configs = [config.get(p, {}) for p in primitives]
 
         indices = tf.range(len(primitives))
@@ -31,8 +31,8 @@ def photometric_augmentation(image, random_order=True):
             image = tf.case(fn_pairs)
             return i + 1, image
 
-        _, aug_image = tf.while_loop(lambda i, image: tf.less(i, len(primitives)),
-                                     step, [0, image], parallel_iterations=1)
+        _, aug_image = tf.while_loop(cond=lambda i, image: tf.less(i, len(primitives)),
+                                     body=step, loop_vars=[0, image], parallel_iterations=1)
 
     return aug_image
 
@@ -64,5 +64,4 @@ def apply_patch_pert(kpt_param, pert_affine, batch_size, num_corr, adjust_ratio=
     trans_with_pad = tf.expand_dims(trans * adjust_ratio, axis=-1)
     kpt_affine_with_pad = tf.concat((rot, trans_with_pad), axis=-1)
     pert_kpt_affine = tf.matmul(kpt_affine_with_pad, pert_affine)
-    pert_kpt_param = tf.reshape(pert_kpt_affine, shape=(batch_size, num_corr, 6))
-    return pert_kpt_affine, trans, pert_kpt_param
+    return pert_kpt_affine, trans
