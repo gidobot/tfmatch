@@ -91,6 +91,9 @@ def training_dataset(match_set_list, img_list, depth_list, reg_feat_list, config
             """
             img = tf.cast(img, tf.float32)
             # img.set_shape((spec.batch_size,
+            #                img.get_shape()[1],
+            #                img.get_shape()[2],
+            #                img.get_shape()[3]))
             img = tf.expand_dims(img, 0)
             if FLAGS.is_training and photaug:
                 print(Notify.WARNING, 'Applying photometric augmentation.', Notify.ENDC)
@@ -124,9 +127,9 @@ def training_dataset(match_set_list, img_list, depth_list, reg_feat_list, config
         K1 = tf.reshape(decoded[16:25], (3, 3))
         e_mat = tf.reshape(decoded[25:34], (3, 3))
         rel_pose = tf.reshape(decoded[34:46], (3, 4))
-        kpt_coeff0 = tf.slice(decoded, [46], [6 * FLAGS.num_corr])
+        kpt_coeff0 = tf.slice(decoded, [46], [6 * 1024])
         kpt_coeff1 = tf.slice(
-            decoded, [46 + 6 * FLAGS.num_corr], [6 * FLAGS.num_corr])
+            decoded, [46 + 6 * 1024], [6 * 1024])
         # parse images.
         img0 = _parse_img(img_list, idx0)
         img1 = _parse_img(img_list, idx1)
@@ -134,7 +137,7 @@ def training_dataset(match_set_list, img_list, depth_list, reg_feat_list, config
         depth0 = _parse_depth(depth_list, idx0)
         depth1 = _parse_depth(depth_list, idx1)
         # inlier mask
-        inlier_mask = tf.concat([tf.ones(inlier_num), tf.zeros(FLAGS.num_corr - inlier_num)], axis=0)
+        inlier_mask = tf.concat([tf.ones(inlier_num), tf.zeros(1024 - inlier_num)], axis=0)
         inlier_mask = tf.cast(inlier_mask, tf.bool)
         # generate random affine/homography transformations
         pert_homo = tf.numpy_function(get_rnd_homography, [2, 1, 0.15], tf.float32)
@@ -142,23 +145,32 @@ def training_dataset(match_set_list, img_list, depth_list, reg_feat_list, config
         # pert_homo = tf.reshape(pert_homo, (2, spec.batch_size, 3, 3))
         pert_homo = tf.reshape(pert_homo, (2, 1, 3, 3))
 
-        pert_affine = tf.numpy_function(get_rnd_affine, [2, 1, FLAGS.num_corr], tf.float32)
+        pert_affine = tf.numpy_function(get_rnd_affine, [2, 1, 1024], tf.float32)
             # get_rnd_affine, [2, spec.batch_size, num_corr], tf.float32)
         # pert_affine = tf.reshape(pert_affine, (2, spec.batch_size, num_corr, 3, 3))
-        pert_affine = tf.reshape(pert_affine, (2, 1, FLAGS.num_corr, 3, 3))
+        pert_affine = tf.reshape(pert_affine, (2, 1, 1024, 3, 3))
         # preprocess
         net_input0, kpt_ncoords0, pert_homo0, img_aug0 = _preprocess(
-            img0, kpt_coeff0, spec, FLAGS.num_corr, config['photaug'],
+            img0, kpt_coeff0, spec, 1024, config['photaug'],
             pert_homo[0], pert_affine[0], config['dense_desc'])
         net_input1, kpt_ncoords1, pert_homo1, img_aug1 = _preprocess(
-            img1, kpt_coeff1, spec, FLAGS.num_corr, config['photaug'],
+            img1, kpt_coeff1, spec, 1024, config['photaug'],
             pert_homo[1], pert_affine[1], config['dense_desc'])
-
 
         # fetch_tensors = [img0, img1, depth0, depth1, kpt_coeff0, kpt_coeff1, inlier_num,
                          # ori_img_size0, ori_img_size1, K0, K1, e_mat, rel_pose]
         # fetch_tensors = [tf.squeeze(net_input0), tf.squeeze(net_input1), inlier_mask]
-        fetch_tensors = {'input0': tf.squeeze(net_input0), 'input1': tf.squeeze(net_input1), 'input_mask': inlier_mask}
+
+        # indices = tf.range(start=0, limit=tf.shape(net_input0)[0], dtype=tf.int32)
+        # shuffled_indices = tf.random.shuffle(indices)[:FLAGS.num_corr]
+        # net_input0 = tf.gather(tf.squeeze(net_input0), shuffled_indices, axis=0)
+        # net_input1 = tf.gather(tf.squeeze(net_input1), shuffled_indices, axis=0)
+        # inlier_mask = tf.gather(inlier_mask, shuffled_indices, axis=0)
+
+        net_input0 = tf.squeeze(net_input0)
+        net_input1 = tf.squeeze(net_input1)
+
+        fetch_tensors = {'input0': net_input0, 'input1': net_input1, 'input_mask': inlier_mask}
         return fetch_tensors
 
     # decoded:
@@ -173,6 +185,7 @@ def training_dataset(match_set_list, img_list, depth_list, reg_feat_list, config
     # [9] kpt_coeff: 1024 * 6 * 2 float
     # [10] geo_sim: 1024 float
     dataset = tf.data.FixedLengthRecordDataset(match_set_list, 53432)
+    # dataset = tf.data.FixedLengthRecordDataset(match_set_list, 4*(46 + num_corr*13))
     if FLAGS.is_training:
         dataset = dataset.shuffle(buffer_size=spec.batch_size * 32)
     dataset = dataset.repeat()
@@ -180,6 +193,7 @@ def training_dataset(match_set_list, img_list, depth_list, reg_feat_list, config
         _match_set_parser, num_parallel_calls=spec.batch_size * 2)
     dataset = dataset.batch(spec.batch_size)
     dataset = dataset.prefetch(buffer_size=spec.batch_size * 4)
+    # dataset = dataset.prefetch(buffer_size=spec.batch_size * 4)
     # iterator = tf.compat.v1.data.make_one_shot_iterator(dataset)
     # batch_tensors = iterator.get_next()
     # return batch_tensors

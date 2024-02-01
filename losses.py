@@ -251,10 +251,11 @@ def make_structured_loss(feat_anc, feat_pos,
 
     return loss, accuracy, matched_mask
 
+# @tf.keras.saving.register_keras_serializable()
 class KerasLoss(tf.keras.layers.Layer):
-    def __init__(self, log_scale=1., loss_type='RATIO', radius_mask_row=None, radius_mask_col=None,
-                corr_weight=None, dist_mat=None):
-        super(KerasLoss, self).__init__()
+    def __init__(self, log_scale=1., loss_type='LOG', radius_mask_row=None, radius_mask_col=None,
+                corr_weight=None, **kwargs):
+        super(KerasLoss, self).__init__(**kwargs)
         if loss_type == 'LOG':
             self.log_scale = tf.Variable(log_scale) # or tf.Variable(var1) etc.
         else:
@@ -263,6 +264,25 @@ class KerasLoss(tf.keras.layers.Layer):
         self.radius_mask_row = radius_mask_row
         self.radius_mask_col = radius_mask_col
         self.corr_weight = corr_weight
+
+    # def get_config(self):
+    #     base_config = super().get_config()
+    #     config = {
+    #         "log_scale": self.log_scale,
+    #         "loss_type": self.loss_type,
+    #         "radius_mask_row": self.radius_mask_row,
+    #         "radius_mask_col": self.radius_mask_col,
+    #         "corr_weight": self.corr_weight
+    #         # "sublayer": keras.saving.serialize_keras_object(self.sublayer),
+    #     }
+    #     return {**base_config, **config}
+
+    # @classmethod
+    # def from_config(cls, config):
+        # sublayer_config = config.pop("sublayer")
+        # sublayer = keras.saving.deserialize_keras_object(sublayer_config)
+        # return cls(sublayer, **config)
+        # return cls(**config)
     
     def get_vars(self):
         return self.log_scale
