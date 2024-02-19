@@ -23,7 +23,7 @@ for layer in conf['layers']:
 dynamic_descnet = model.from_config(conf)
 dynamic_descnet.set_weights(descnet.get_weights())
 dynamic_descnet.summary()
-dynamic_descnet.save('ckpt-contextdesc/descnet_litest.hdf5', overwrite=True)
+dynamic_descnet.save('ckpt-contextdesc/descnet_litest2.hdf5', overwrite=True)
 
 # # load dataset
 # dataset = loadtxt("pima-indians-diabetes.csv", delimiter=",")

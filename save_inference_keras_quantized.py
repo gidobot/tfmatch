@@ -38,34 +38,31 @@ def apply_quantization_to_model(layer):
 
 
 # load model
-model = load_model('ckpt-contextdesc/model-20000.hdf5',
-	custom_objects={"KerasLoss": KerasLoss})
-# model = tf.keras.Model(model.get_layer('conv2d').input, model.get_layer('tf.math.l2_normalize').output)
+with tfmot.quantization.keras.quantize_scope():
+	model = load_model('ckpt-contextdesc/quant/model-5000.hdf5',
+		custom_objects={"KerasLoss": KerasLoss, 'DefaultBNQuantizeConfig': DefaultBNQuantizeConfig})
 
-# summarize model.
-model.summary()
+	descnet = tf.keras.Model(model.input[0], model.get_layer('tf.math.l2_normalize').output)
+	# descnet = model
 
-model = tf.keras.Model(model.get_layer('tf.reshape').output, model.get_layer('tf.math.l2_normalize').output)
-conf = model.get_config()
-for layer in conf['layers']:
-	if 'batch_input_shape' in layer['config']:
-		shape = layer['config']['batch_input_shape']
-		shape = (None, *shape[1:])
-		layer['config']['batch_input_shape'] = shape
-model = model.from_config(conf)
+	descnet.summary()
 
-with tf.keras.utils.custom_object_scope({'KerasLoss': KerasLoss, 'DefaultBNQuantizeConfig': DefaultBNQuantizeConfig}):
-	model = clone_model(model, clone_function=apply_quantization_to_model)
-	model = tfmot.quantization.keras.quantize_apply(model)
-	# model.load_weights('ckpt-contextdesc/quant/model-20000.hdf5', by_name=True)
-	model.load_weights('ckpt-contextdesc/quant/model-5000.hdf5', by_name=True)
-	model.summary()
+	# with tf.keras.utils.custom_object_scope({'KerasLoss': KerasLoss, 'DefaultBNQuantizeConfig': DefaultBNQuantizeConfig}):
+	# 	conf = descnet.get_config()
+	# 	for layer in conf['layers']:
+	# 		if 'batch_input_shape' in layer['config']:
+	# 			shape = layer['config']['batch_input_shape']
+	# 			shape = (None, *shape[1:])
+	# 			layer['config']['batch_input_shape'] = shape
 
-	# model2 = clone_model(model2, clone_function=apply_quantization_to_model)
-	# model2 = tfmot.quantization.keras.quantize_apply(model2)
-	# model2.set_weights(model.get_weights())
+	# 	dynamic_descnet = model.from_config(conf)
+	# 	dynamic_descnet.set_weights(descnet.get_weights())
+	# 	dynamic_descnet.summary()
 
-	converter = tf.lite.TFLiteConverter.from_keras_model(model)
+	# 	# dynamic_descnet.save('ckpt-contextdesc/quant/descnet_quant.hdf5', overwrite=True)
+
+
+	converter = tf.lite.TFLiteConverter.from_keras_model(descnet)
 	converter.optimizations = [tf.lite.Optimize.DEFAULT]
 	# converter.inference_input_type = tf.uint8
 	# converter.inference_output_type = tf.uint8

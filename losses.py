@@ -252,7 +252,7 @@ def make_structured_loss(feat_anc, feat_pos,
     return loss, accuracy, matched_mask
 
 # @tf.keras.saving.register_keras_serializable()
-class KerasLoss(tf.keras.layers.Layer):
+class KerasLossSave(tf.keras.layers.Layer):
     def __init__(self, log_scale=1., loss_type='LOG', radius_mask_row=None, radius_mask_col=None,
                 corr_weight=None, **kwargs):
         super(KerasLoss, self).__init__(**kwargs)
@@ -421,6 +421,182 @@ class KerasLoss(tf.keras.layers.Layer):
         loss /= tf.cast(batch_size, tf.float32)
         loss = tf.reduce_mean(loss)
         accuracy /= tf.cast(batch_size, tf.float32)
+        accuracy = tf.reduce_mean(accuracy)
+
+        # return loss, accuracy, matched_mask
+        return loss
+
+    
+    def call(self, feat_anc, feat_pos, inlier_mask):
+        loss = self.custom_loss(feat_anc, feat_pos, inlier_mask)
+        self.add_loss(loss)
+        return feat_anc, feat_pos, loss
+
+
+class KerasLoss(tf.keras.layers.Layer):
+    def __init__(self, log_scale=1., loss_type='LOG', radius_mask_row=None, radius_mask_col=None,
+                corr_weight=None, **kwargs):
+        super(KerasLoss, self).__init__(**kwargs)
+        if loss_type == 'LOG':
+            self.log_scale = tf.Variable(log_scale) # or tf.Variable(var1) etc.
+        else:
+            self.log_scale = tf.keras.constant(1.)
+        self.loss_type = loss_type
+        self.radius_mask_row = radius_mask_row
+        self.radius_mask_col = radius_mask_col
+        self.corr_weight = corr_weight
+
+    # def get_config(self):
+    #     base_config = super().get_config()
+    #     config = {
+    #         "log_scale": self.log_scale,
+    #         "loss_type": self.loss_type,
+    #         "radius_mask_row": self.radius_mask_row,
+    #         "radius_mask_col": self.radius_mask_col,
+    #         "corr_weight": self.corr_weight
+    #         # "sublayer": keras.saving.serialize_keras_object(self.sublayer),
+    #     }
+    #     return {**base_config, **config}
+
+    # @classmethod
+    # def from_config(cls, config):
+        # sublayer_config = config.pop("sublayer")
+        # sublayer = keras.saving.deserialize_keras_object(sublayer_config)
+        # return cls(sublayer, **config)
+        # return cls(**config)
+    
+    def get_vars(self):
+        return self.log_scale
+    
+    def custom_loss(self, feat_anc, feat_pos, inlier_mask):
+        inlier_mask = tf.cast(inlier_mask, tf.bool)
+        batch_size = feat_anc.get_shape().as_list()[0]
+        if inlier_mask is None:
+            inlier_mask = tf.cast(tf.ones((batch_size,)), tf.bool)
+        inlier_num = tf.math.count_nonzero(tf.cast(inlier_mask, tf.float32), axis=0)
+
+        if self.loss_type == 'LOG' or self.loss_type == 'L2NET' or self.loss_type == 'CIRCLE':
+            dist_type = 'cosine_dist'
+        elif self.loss_type.find('HARD') >= 0:
+            dist_type = 'euclidean_dist'
+        else:
+            raise NotImplementedError()
+
+        dist_mat = get_dist_mat(feat_anc, feat_pos, dist_type)
+        pos_vec = tf.linalg.diag_part(dist_mat)
+
+        if self.loss_type.find('HARD') >= 0:
+            neg_margin = 1
+            dist_mat_without_min_on_diag = dist_mat + \
+                10 * tf.expand_dims(tf.eye(num_corr), 0)
+            mask = tf.cast(
+                tf.less(dist_mat_without_min_on_diag, 0.008), tf.float32)
+            dist_mat_without_min_on_diag += mask*10
+
+            if self.radius_mask_row is not None:
+                hard_neg_dist_row = dist_mat_without_min_on_diag + 10 * self.radius_mask_row
+            else:
+                hard_neg_dist_row = dist_mat_without_min_on_diag
+            if self.radius_mask_col is not None:
+                hard_neg_dist_col = dist_mat_without_min_on_diag + 10 * self.radius_mask_col
+            else:
+                hard_neg_dist_col = dist_mat_without_min_on_diag
+
+            hard_neg_dist_row = tf.reduce_min(hard_neg_dist_row, axis=-1)
+            hard_neg_dist_col = tf.reduce_min(hard_neg_dist_col, axis=-2)
+
+            if self.loss_type == 'HARD_TRIPLET':
+                loss_row = tf.maximum(neg_margin + pos_vec - hard_neg_dist_row, 0)
+                loss_col = tf.maximum(neg_margin + pos_vec - hard_neg_dist_col, 0)
+            elif self.loss_type == 'HARD_CONTRASTIVE':
+                pos_margin = 0.2
+                pos_loss = tf.maximum(pos_vec - pos_margin, 0)
+                loss_row = pos_loss + tf.maximum(neg_margin - hard_neg_dist_row, 0)
+                loss_col = pos_loss + tf.maximum(neg_margin - hard_neg_dist_col, 0)
+            else:
+                raise NotImplementedError()
+
+        elif self.loss_type == 'LOG' or self.loss_type == 'L2NET':
+            softmax_row = tf.nn.softmax(self.log_scale * dist_mat, axis=1)
+            softmax_col = tf.nn.softmax(self.log_scale * dist_mat, axis=0)
+
+            loss_row = -tf.math.log(tf.linalg.diag_part(softmax_row))
+            loss_col = -tf.math.log(tf.linalg.diag_part(softmax_col))
+        
+        elif self.loss_type == 'CIRCLE':
+            self.log_scale = 512
+            m = 0.1
+            neg_mask_row = tf.expand_dims(tf.eye(num_corr), 0)
+            if self.radius_mask_row is not None:
+                neg_mask_row += self.radius_mask_row
+            neg_mask_col = tf.expand_dims(tf.eye(num_corr), 0)
+            if self.radius_mask_col is not None:
+                neg_mask_col += self.radius_mask_col
+
+            pos_margin = 1 - m
+            neg_margin = m
+            pos_optimal = 1 + m
+            neg_optimal = -m
+
+            neg_mat_row = dist_mat - 128 * neg_mask_row
+            neg_mat_col = dist_mat - 128 * neg_mask_col
+
+            lse_positive = tf.math.reduce_logsumexp(-self.log_scale * (pos_vec[..., None] - pos_margin) * \
+                        tf.stop_gradient(tf.maximum(pos_optimal - pos_vec[..., None], 0)), axis=-1)
+            
+            lse_negative_row = tf.math.reduce_logsumexp(self.log_scale * (neg_mat_row - neg_margin) * \
+                        tf.stop_gradient(tf.maximum(neg_mat_row - neg_optimal, 0)), axis=-1)
+
+            lse_negative_col = tf.math.reduce_logsumexp(self.log_scale * (neg_mat_col - neg_margin) * \
+                        tf.stop_gradient(tf.maximum(neg_mat_col - neg_optimal, 0)), axis=-2)
+
+            loss_row = tf.math.softplus(lse_positive + lse_negative_row) / self.log_scale
+            loss_col = tf.math.softplus(lse_positive + lse_negative_col) / self.log_scale
+
+        else:
+            raise NotImplementedError()
+
+        if dist_type == 'cosine_dist':
+            err_row = dist_mat - tf.expand_dims(pos_vec, -1)
+            err_col = dist_mat - tf.expand_dims(pos_vec, -2)
+        elif dist_type == 'euclidean_dist' or dist_type == 'euclidean_dist_no_norm':
+            err_row = tf.expand_dims(pos_vec, -1) - dist_mat
+            err_col = tf.expand_dims(pos_vec, -2) - dist_mat
+        else:
+            raise NotImplementedError()
+        if self.radius_mask_row is not None:
+            err_row = err_row - 10 * self.radius_mask_row
+        if self.radius_mask_col is not None:
+            err_col = err_col - 10 * self.radius_mask_col
+        err_row = tf.reduce_sum(tf.maximum(err_row, 0), axis=-1)
+        err_col = tf.reduce_sum(tf.maximum(err_col, 0), axis=-2)
+
+        loss = tf.zeros(1)
+        accuracy = tf.zeros(1)
+
+        tot_loss = (loss_row + loss_col) / 2
+        if self.corr_weight is not None:
+            tot_loss = tot_loss * self.corr_weight
+
+        if self.corr_weight is not None:
+            loss += tf.reduce_sum(tot_loss[inlier_mask]) / \
+                (tf.reduce_sum(self.corr_weight[inlier_mask]) + 1e-6)
+        else:
+            loss += tf.reduce_mean(tot_loss[inlier_mask])
+        cnt_err_row = tf.math.count_nonzero(
+            err_row[inlier_mask], dtype=tf.float32)
+        cnt_err_col = tf.math.count_nonzero(
+            err_col[inlier_mask], dtype=tf.float32)
+        tot_err = tf.cast(cnt_err_row + cnt_err_col, tf.float32)
+        accuracy += 1. - \
+            tf.math.divide_no_nan(tot_err, tf.cast(inlier_num, tf.float32)) / 2.
+
+        matched_mask = tf.logical_and(tf.equal(err_row, 0), tf.equal(err_col, 0))
+        matched_mask = tf.logical_and(matched_mask, inlier_mask)
+
+        # loss /= tf.cast(batch_size, tf.float32)
+        loss = tf.reduce_mean(loss)
+        # accuracy /= tf.cast(batch_size, tf.float32)
         accuracy = tf.reduce_mean(accuracy)
 
         # return loss, accuracy, matched_mask

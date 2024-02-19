@@ -14,8 +14,8 @@ solver:
     adjust_lr: []
     update_var_scope:
 recoverer:
-  pretrained_model:
-  # pretrained_model: 'ckpt-contextdesc/model-5500.hdf5'
+  # pretrained_model:
+  pretrained_model: 'ckpt-contextdesc/litest2_desc/model-20000.hdf5'
   # pretrained_model: 'ckpt-contextdesc/model.ckpt-800000'
   # pretrained_model: '/media/gidobot/data/contextdesc/pretrained/contextdesc++/model.ckpt-400000'
   ckpt_step:
@@ -24,11 +24,13 @@ recoverer:
 dump:
   snapshot: 10000
   display: 20
-  max_steps: 400000
+  # max_steps: 400000
+  max_steps: 100000
   log_dir: 'log'
 network:
   quantize: false
-  quantize_aware: false
+  quantize_aware: true
+  # quantize_aware: false
   loss_type: 'LOG'
   photaug: true
   dense_desc: false

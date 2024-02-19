@@ -173,6 +173,12 @@ def training_dataset(match_set_list, img_list, depth_list, reg_feat_list, config
         fetch_tensors = {'input0': net_input0, 'input1': net_input1, 'input_mask': inlier_mask}
         return fetch_tensors
 
+    def _batch_merge(val):
+        val['input0'] = tf.reshape(val['input0'], (-1, 32, 32, 1))
+        val['input1'] = tf.reshape(val['input1'], (-1, 32, 32, 1))
+        val['input_mask'] = tf.reshape(val['input_mask'], (-1,1))
+        return val
+
     # decoded:
     # [1] inlier_num: 1 float
     # [2] idx: 2 float
@@ -192,6 +198,7 @@ def training_dataset(match_set_list, img_list, depth_list, reg_feat_list, config
     dataset = dataset.map(
         _match_set_parser, num_parallel_calls=spec.batch_size * 2)
     dataset = dataset.batch(spec.batch_size)
+    dataset = dataset.map(_batch_merge)
     dataset = dataset.prefetch(buffer_size=spec.batch_size * 4)
     # dataset = dataset.prefetch(buffer_size=spec.batch_size * 4)
     # iterator = tf.compat.v1.data.make_one_shot_iterator(dataset)

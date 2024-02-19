@@ -32,7 +32,7 @@ from template.misc import summarizer
 from template.solver import solver
 from template.recoverer import recoverer
 
-from cnn_wrapper.desckeras import DescNet, DescNet2, DescNet3, DescNet4, DescNet5
+from cnn_wrapper.desckeras import DescNet, DescNet2, DescNet3, DescNet4, DescNet5, DescNet6
 
 FLAGS = flags.FLAGS
 
@@ -159,6 +159,8 @@ def train(sample_list, img_list, depth_list, reg_feat_list, train_config):
     if train_config['recoverer']['pretrained_model'] is not None:
         if not os.path.exists(train_config['recoverer']['pretrained_model']):
             raise ValueError('Pretrained model path does not exist: {}'.format(train_config['recoverer']['pretrained_model']))
+        else:
+            print("Recovering model from {}".format(train_config['recoverer']['pretrained_model']))
         siamese = tf.keras.models.load_model(train_config['recoverer']['pretrained_model'],
                                             custom_objects={"KerasLoss": KerasLoss})
 
@@ -184,8 +186,10 @@ def train(sample_list, img_list, depth_list, reg_feat_list, train_config):
         #     siamese.compile(optimizer=optimizer)
     else:
         # Define input tensors
-        input0 = tf.keras.Input(shape=(FLAGS.num_corr, 32, 32, 1), batch_size=FLAGS.batch_size, name='input0')
-        input1 = tf.keras.Input(shape=(FLAGS.num_corr, 32, 32, 1), batch_size=FLAGS.batch_size, name='input1')
+        # input0 = tf.keras.Input(shape=(FLAGS.num_corr, 32, 32, 1), batch_size=FLAGS.batch_size, name='input0')
+        # input1 = tf.keras.Input(shape=(FLAGS.num_corr, 32, 32, 1), batch_size=FLAGS.batch_size, name='input1')
+        input0 = tf.keras.Input(shape=(32, 32, 1), name='input0')
+        input1 = tf.keras.Input(shape=(32, 32, 1), name='input1')
 
         # Instantiate feature towers
         if 0:
@@ -197,18 +201,24 @@ def train(sample_list, img_list, depth_list, reg_feat_list, train_config):
         elif 0:
             feat_tower0 = DescNet3().build(input0)
             feat_tower1 = DescNet3().build(input1)
-        elif 0:
+        elif 1:
             feat_tower0 = DescNet4().build(input0)
             feat_tower1 = DescNet4().build(input1)
-        elif 1:
+        elif 0:
             feat_tower0 = DescNet5().build(input0)
             feat_tower1 = DescNet5().build(input1)
+        elif 0:
+            feat_tower0 = DescNet6().build(input0)
+            feat_tower1 = DescNet6().build(input1)
 
         # Instantiate a loss layer.
-        inlier_mask_input = tf.keras.Input(shape=(FLAGS.num_corr), batch_size=FLAGS.batch_size, name='input_mask')
-        feat0 = tf.reshape(feat_tower0.output, (FLAGS.batch_size, FLAGS.num_corr, 128))
-        feat1 = tf.reshape(feat_tower1.output, (FLAGS.batch_size, FLAGS.num_corr, 128))
-        loss_feat0_layer, loss_feat1_layer, loss = KerasLoss(loss_type='LOG')(feat0, feat1, inlier_mask_input)
+        inlier_mask_input = tf.keras.Input(shape=(1), name='input_mask')
+        inlier_mask_reshape = tf.reshape(inlier_mask_input, (-1,))
+        # feat0 = tf.reshape(feat_tower0.output, (FLAGS.batch_size, FLAGS.num_corr, 128))
+        # feat1 = tf.reshape(feat_tower1.output, (FLAGS.batch_size, FLAGS.num_corr, 128))
+        feat0 = tf.reshape(feat_tower0.output, (-1, 128))
+        feat1 = tf.reshape(feat_tower1.output, (-1, 128))
+        loss_feat0_layer, loss_feat1_layer, loss = KerasLoss(loss_type='LOG')(feat0, feat1, inlier_mask_reshape)
 
         tf.summary.scalar('loss', loss)
 
