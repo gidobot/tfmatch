@@ -15,7 +15,7 @@ solver:
     update_var_scope:
 recoverer:
   # pretrained_model:
-  pretrained_model: 'ckpt-contextdesc/litest2_desc/model-20000.hdf5'
+  pretrained_model: 'ckpt-contextdesc/litest_grid/model-20000.hdf5'
   # pretrained_model: 'ckpt-contextdesc/model.ckpt-800000'
   # pretrained_model: '/media/gidobot/data/contextdesc/pretrained/contextdesc++/model.ckpt-400000'
   ckpt_step:
@@ -28,9 +28,9 @@ dump:
   max_steps: 100000
   log_dir: 'log'
 network:
-  quantize: false
   quantize_aware: true
   # quantize_aware: false
+  grid_mode: true
   loss_type: 'LOG'
   photaug: true
   dense_desc: false
@@ -38,6 +38,7 @@ network:
   use_corr_n: -1
   deform_desc: 0
   sift: false
+  quantize: false
   aug:
     # Geometric context
     geo_context: false

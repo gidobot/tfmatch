@@ -7,23 +7,27 @@ from losses import KerasLoss
 # load model
 model = load_model('ckpt-contextdesc/model-20000.hdf5',
 	custom_objects={"KerasLoss": KerasLoss})
+
+# descnet = tf.keras.Model(model.get_layer('conv2d').input, model.get_layer('tf.math.l2_normalize').output)
+descnet = tf.keras.Model(model.input[0], model.get_layer('tf.math.l2_normalize').output)
+
 # summarize model.
-model.summary()
+descnet.summary()
 
-descnet = tf.keras.Model(model.get_layer('conv2d').input, model.get_layer('tf.math.l2_normalize').output)
+# conf = descnet.get_config()
 
-conf = descnet.get_config()
+# for layer in conf['layers']:
+# 	if 'batch_input_shape' in layer['config']:
+# 		shape = layer['config']['batch_input_shape']
+# 		shape = (None, *shape[1:])
+# 		layer['config']['batch_input_shape'] = shape
 
-for layer in conf['layers']:
-	if 'batch_input_shape' in layer['config']:
-		shape = layer['config']['batch_input_shape']
-		shape = (None, *shape[1:])
-		layer['config']['batch_input_shape'] = shape
+# dynamic_descnet = model.from_config(conf)
+# dynamic_descnet.set_weights(descnet.get_weights())
+# dynamic_descnet.summary()
+# dynamic_descnet.save('ckpt-contextdesc/descnet_litest_grid.hdf5', overwrite=True)
 
-dynamic_descnet = model.from_config(conf)
-dynamic_descnet.set_weights(descnet.get_weights())
-dynamic_descnet.summary()
-dynamic_descnet.save('ckpt-contextdesc/descnet_litest2.hdf5', overwrite=True)
+descnet.save('ckpt-contextdesc/descnet_litest_grid.hdf5', overwrite=True)
 
 # # load dataset
 # dataset = loadtxt("pima-indians-diabetes.csv", delimiter=",")

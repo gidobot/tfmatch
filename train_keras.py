@@ -32,7 +32,7 @@ from template.misc import summarizer
 from template.solver import solver
 from template.recoverer import recoverer
 
-from cnn_wrapper.desckeras import DescNet, DescNet2, DescNet3, DescNet4, DescNet5, DescNet6
+from cnn_wrapper.desckeras import DescNet, DescNet2, DescNet3, DescNet4, DescNet5, DescNet6, DescNet4_grid
 
 FLAGS = flags.FLAGS
 
@@ -130,6 +130,7 @@ def apply_quantization_to_model(layer):
         return quantize_annotate_layer(layer)
     return layer
 
+
 def train(sample_list, img_list, depth_list, reg_feat_list, train_config):
     """The training procedure.
     Args:
@@ -188,8 +189,12 @@ def train(sample_list, img_list, depth_list, reg_feat_list, train_config):
         # Define input tensors
         # input0 = tf.keras.Input(shape=(FLAGS.num_corr, 32, 32, 1), batch_size=FLAGS.batch_size, name='input0')
         # input1 = tf.keras.Input(shape=(FLAGS.num_corr, 32, 32, 1), batch_size=FLAGS.batch_size, name='input1')
-        input0 = tf.keras.Input(shape=(32, 32, 1), name='input0')
-        input1 = tf.keras.Input(shape=(32, 32, 1), name='input1')
+        if train_config['network']['grid_mode']:
+            input0 = tf.keras.Input(shape=(None, 32, 1), batch_size=1, name='input0')
+            input1 = tf.keras.Input(shape=(None, 32, 1), batch_size=1, name='input1')
+        else:
+            input0 = tf.keras.Input(shape=(32, 32, 1), name='input0')
+            input1 = tf.keras.Input(shape=(32, 32, 1), name='input1')
 
         # Instantiate feature towers
         if 0:
@@ -201,7 +206,7 @@ def train(sample_list, img_list, depth_list, reg_feat_list, train_config):
         elif 0:
             feat_tower0 = DescNet3().build(input0)
             feat_tower1 = DescNet3().build(input1)
-        elif 1:
+        elif 0:
             feat_tower0 = DescNet4().build(input0)
             feat_tower1 = DescNet4().build(input1)
         elif 0:
@@ -210,6 +215,9 @@ def train(sample_list, img_list, depth_list, reg_feat_list, train_config):
         elif 0:
             feat_tower0 = DescNet6().build(input0)
             feat_tower1 = DescNet6().build(input1)
+        elif 1:
+            feat_tower0 = DescNet4_grid().build(input0)
+            feat_tower1 = DescNet4_grid().build(input1)
 
         # Instantiate a loss layer.
         inlier_mask_input = tf.keras.Input(shape=(1), name='input_mask')

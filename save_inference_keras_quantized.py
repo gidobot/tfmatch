@@ -96,6 +96,9 @@ def main(argv=None):  # pylint: disable=unused-argument
         descnet = tf.keras.Model(model.input[0], model.get_layer('tf.math.l2_normalize').output)
         # descnet = model
 
+        # Coral TPU only supports batch size of 1
+        # descnet.input.set_shape((2000,) + descnet.input.shape[1:])
+
         descnet.summary()
 
         # with tf.keras.utils.custom_object_scope({'KerasLoss': KerasLoss, 'DefaultBNQuantizeConfig': DefaultBNQuantizeConfig}):
@@ -123,7 +126,7 @@ def main(argv=None):  # pylint: disable=unused-argument
 
         # it = tf.lite.Interpreter(model_content=tflite_model)
         # import pdb; pdb.set_trace()
-        with open('ckpt-contextdesc/quant/model.tflite', 'wb') as f:
+        with open('ckpt-contextdesc/quant/model_grid.tflite', 'wb') as f:
           f.write(tflite_model)
 
     # model.save('ckpt-contextdesc/quant/descnet_quant.hdf5', overwrite=True)

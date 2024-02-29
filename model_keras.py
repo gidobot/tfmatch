@@ -174,10 +174,39 @@ def training_dataset(match_set_list, img_list, depth_list, reg_feat_list, config
         return fetch_tensors
 
     def _batch_merge(val):
-        val['input0'] = tf.reshape(val['input0'], (-1, 32, 32, 1))
-        val['input1'] = tf.reshape(val['input1'], (-1, 32, 32, 1))
+        val['input0'] = tf.reshape(val['input0'], (2048, 32, 32, 1))
+        val['input1'] = tf.reshape(val['input1'], (2048, 32, 32, 1))
         val['input_mask'] = tf.reshape(val['input_mask'], (-1,1))
         return val
+
+    # def _interlieve(val):
+    #     x = val.numpy()
+    #     shape = x.shape
+    #     ig = np.zeros((2*shape[0] - 1, 32,  32, 1))
+    #     idx = list(range(0, ig.shape[0], 2))
+    #     ig[idx] = val
+    #     return ig
+
+    def _gridify(val):
+        i0 = val['input0']
+        i1 = val['input1']
+        ind = tf.expand_dims(tf.range(0, 2*2048-1, 2), -1)
+        ig0 = tf.scatter_nd(indices=ind, updates=i0, shape=tf.constant([2*2048-1, 32, 32, 1]))
+        ig1 = tf.scatter_nd(indices=ind, updates=i1, shape=tf.constant([2*2048-1, 32, 32, 1]))
+        # shape = i0.shape
+        # ig0 = np.zeros((2*shape[0] - 1, 32,  32, 1))
+        # ig1 = np.zeros((2*shape[0] - 1, 32,  32, 1))
+        # idx = list(range(0, ig.shape[0], 2))
+        # ig0[idx] = i0
+        # ig1[idx] = i1
+        # val['input0'] = tf.reshape(ig0, (1, -1, 32, 1))
+        # val['input1'] = tf.reshape(ig1, (1, -1, 32, 1))
+        # ig0 = _interlieve(val['input0'])
+        # ig1 = _interlieve(val['input1'])
+        val['input0'] = tf.reshape(ig0, (1, -1, 32, 1)) 
+        val['input1'] = tf.reshape(ig1, (1, -1, 32, 1)) 
+        return val
+
 
     # decoded:
     # [1] inlier_num: 1 float
@@ -199,6 +228,8 @@ def training_dataset(match_set_list, img_list, depth_list, reg_feat_list, config
         _match_set_parser, num_parallel_calls=spec.batch_size * 2)
     dataset = dataset.batch(spec.batch_size)
     dataset = dataset.map(_batch_merge)
+    if config['grid_mode']:
+        dataset = dataset.map(_gridify)
     dataset = dataset.prefetch(buffer_size=spec.batch_size * 4)
     # dataset = dataset.prefetch(buffer_size=spec.batch_size * 4)
     # iterator = tf.compat.v1.data.make_one_shot_iterator(dataset)
